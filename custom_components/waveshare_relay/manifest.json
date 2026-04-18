@@ -1,0 +1,11 @@
+{
+  "domain": "waveshare_relay",
+  "name": "Waveshare Modbus Relay",
+  "version": "2.0.0",
+  "documentation": "https://github.com/icecoldfire/HomeAssistant-Waveshare-Relay",
+  "requirements": [],
+  "dependencies": [],
+  "codeowners": ["@icecoldfire"],
+  "config_flow": true,
+  "iot_class": "local_polling"
+}

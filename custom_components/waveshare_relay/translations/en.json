@@ -1,0 +1,26 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Waveshare Modbus Relay Setup",
+        "description": "Configure your Waveshare PoE ETH Relay board.\n\nDefault port is **4196** (Modbus RTU over TCP).\nSet the IP address to match your device's network configuration.",
+        "data": {
+          "ip_address": "IP Address",
+          "port": "Modbus Port",
+          "device_name": "Device Name",
+          "num_channels": "Number of Channels",
+          "enable_switches": "Enable Relay Switches",
+          "enable_inputs": "Enable Digital Inputs",
+          "di_toggle_mode": "DI Toggle Mode (physical buttons toggle relays)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot connect to device. Check IP address and port.",
+      "unknown": "Unexpected error occurred."
+    },
+    "abort": {
+      "already_configured": "This device is already configured."
+    }
+  }
+}

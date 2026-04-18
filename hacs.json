@@ -1,0 +1,6 @@
+{
+  "name": "Waveshare Modbus Relay",
+  "homeassistant": "2025.1.0",
+  "render_readme": true,
+  "iot_class": "local_polling"
+}
