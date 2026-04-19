@@ -8,22 +8,90 @@ Based on [icecoldfire/HomeAssistant-Waveshare-Relay](https://github.com/icecoldf
 - **Modbus RTU over TCP** (CRC16 framing) instead of Modbus TCP
 - **Digital input binary sensors** (detect open/close on DI terminals)
 - **UI-configurable feature toggles** (enable/disable switches and inputs)
-- **DI toggle mode** (physical buttons toggle corresponding relays)
+- **Standard and Extended modes** for simple or power-user setups
 - Fixed compatibility with Home Assistant 2025.x+
-
-## Features
-
-| Feature | Entity Type | Description |
-|---------|------------|-------------|
-| Relay control | `switch` | Turn relays ON/OFF, reads back actual state |
-| Digital inputs | `binary_sensor` | Detects triggered/open/close on DI terminals |
-| DI toggle mode | Config option | Physical buttons on DI terminals toggle relays |
 
 ## Links
 
 - [Product page](https://www.waveshare.com/modbus-poe-eth-relay-b.htm) — Waveshare Modbus PoE ETH Relay (B)
 - [Wiki / Documentation](https://www.waveshare.com/wiki/Modbus_POE_ETH_Relay_(B)) — Wiring, protocol specs, software tools
 - [Original integration](https://github.com/icecoldfire/HomeAssistant-Waveshare-Relay) — Upstream project this is based on
+
+---
+
+## Standard Mode vs Extended Mode
+
+The integration offers two operational modes, selectable during setup:
+
+### Standard Mode (default)
+
+Simple relay control and input monitoring. Perfect for basic on/off switching.
+
+| Entity Type | Count (8ch) | Description |
+|-------------|-------------|-------------|
+| `switch` | 8 | Relay on/off control with state polling |
+| `binary_sensor` | 8 | Digital input open/close detection |
+
+### Extended Mode
+
+Adds advanced features for power users, automation builders, and industrial applications.
+
+| Entity Type | Count (8ch) | Description |
+|-------------|-------------|-------------|
+| `switch` | 8 | Relay on/off control with state polling |
+| `binary_sensor` | 8 | Digital input open/close detection |
+| `button` (pulse) | 8 | Pulse relay ON for a set duration, then auto-OFF |
+| `number` (duration) | 8 | Configurable pulse duration per relay (0.1s - 3276s) |
+| `select` (DI mode) | 8 | Per-channel DI control mode selector (4 modes) |
+| `button` (master) | 3 | All Relays ON / All Relays OFF / Toggle All |
+| `sensor` (diagnostic) | 2 | Firmware version + Modbus device address |
+
+**Services** (registered in both modes):
+- `waveshare_relay.toggle_relay` — Toggle a specific relay by channel
+- `waveshare_relay.toggle_all` — Toggle all relays at once
+
+---
+
+## Digital Input (DI) Control Modes
+
+Each digital input channel can be independently configured to one of four control modes. In Standard Mode, you can enable "DI Toggle Mode" to set all channels to Toggle mode. In Extended Mode, each channel gets its own mode selector in the UI.
+
+| Mode | Value | Behavior |
+|------|-------|----------|
+| **Normal** | 0 | DI is read-only sensor. Relay is controlled only by commands (HA switches, automations, services). DI state is reported but does not affect the relay. |
+| **Linkage** | 1 | Relay mirrors DI state in real-time. DI ON = relay ON, DI OFF = relay OFF. **Relay cannot be controlled by commands in this mode** — only by the physical input. |
+| **Toggle** | 2 | Each pulse on the DI terminal toggles the corresponding relay. Press a button wired to DI1 and relay 1 flips. Relay can also still be controlled by commands. |
+| **Edge Trigger** | 3 | Relay changes state once on each DI level change (rising or falling edge). Similar to Toggle but triggers on both press AND release. Relay can also still be controlled by commands. |
+
+> **Important:** In **Linkage mode**, the relay does NOT respond to HA switch commands — it is controlled exclusively by the physical DI input. All other modes support both physical and command control.
+
+### When to use each mode
+
+| Use Case | Recommended Mode |
+|----------|-----------------|
+| HA-only control (no physical buttons) | **Normal** |
+| Wall switch directly controls a light | **Linkage** |
+| Push-button toggles a light on/off | **Toggle** |
+| Motion sensor or door contact triggers relay | **Edge Trigger** |
+| Hybrid: HA + physical buttons | **Toggle** or **Edge Trigger** |
+
+---
+
+## Relay Flash / Pulse
+
+Extended Mode adds a **Pulse** button for each relay. When pressed:
+
+1. The relay turns **ON**
+2. It stays on for the configured **Pulse Duration** (set via the number slider)
+3. It automatically turns **OFF**
+
+This is handled entirely by the Waveshare hardware (Modbus flash-on command at address `0x0200+`), so the timing is precise and works even if HA loses connection.
+
+**Use cases:** Garage door openers, door buzzers, irrigation valves, momentary triggers, timed ventilation.
+
+The pulse duration is configurable per-relay from **0.1 seconds** to **3,276.7 seconds** (~54 minutes). The resolution is 100ms.
+
+---
 
 ## Requirements
 
@@ -37,7 +105,7 @@ Before adding the integration, configure your Waveshare relay board:
 
 ### 1. Access the Device Web Interface
 
-Open a browser and navigate to the device IP (default: `http://192.168.1.200`). Default password: `admin`.
+Open a browser and navigate to the device IP (default: `http://192.168.1.200`). Default password: `admin` (or no password on some firmware versions — enter any value).
 
 ### 2. Network Settings
 
@@ -48,7 +116,7 @@ Open a browser and navigate to the device IP (default: `http://192.168.1.200`). 
 | Work Mode | **TCP Server** |
 | IP Mode | DHCP or Static |
 
-### 3. Serial Settings (for RTU over TCP)
+### 3. Serial Settings (do not change from defaults)
 
 | Setting | Value |
 |---------|-------|
@@ -57,7 +125,13 @@ Open a browser and navigate to the device IP (default: `http://192.168.1.200`). 
 | Parity | None |
 | Stop Bits | 1 |
 
-> **Note:** The device port (default 4196) is the Modbus RTU-over-TCP port, NOT the standard Modbus TCP port 502. This integration communicates using raw Modbus RTU frames over the TCP socket.
+> **Note:** The device port (default 4196) is the Modbus RTU-over-TCP port, NOT the standard Modbus TCP port 502. This integration communicates using raw Modbus RTU frames over the TCP socket. Do not change the serial settings — they must remain at the defaults for the internal relay controller to communicate.
+
+### 4. Advanced Settings (Vircom software)
+
+If using the Vircom configuration tool:
+- Set **Transfer Protocol** to **"None"** (this means Modbus RTU — the default)
+- Set **Modbus Gateway Type** to **"Multi-host non-storage"** (prevents the gateway from sending its own queries that interfere with HA)
 
 ## Installation
 
@@ -69,9 +143,14 @@ Open a browser and navigate to the device IP (default: `http://192.168.1.200`). 
    └── waveshare_relay/
        ├── __init__.py
        ├── binary_sensor.py
+       ├── button.py
        ├── config_flow.py
        ├── const.py
        ├── manifest.json
+       ├── number.py
+       ├── select.py
+       ├── sensor.py
+       ├── services.yaml
        ├── switch.py
        ├── utils.py
        └── translations/
@@ -108,17 +187,39 @@ Open a browser and navigate to the device IP (default: `http://192.168.1.200`). 
 | Number of Channels | 8 | Match your board (8, 4, or 2) |
 | Enable Relay Switches | ON | Creates switch entities for relay control |
 | Enable Digital Inputs | ON | Creates binary_sensor entities for DI terminals |
-| DI Toggle Mode | OFF | Physical buttons toggle corresponding relays |
+| DI Toggle Mode | OFF | Sets all DI channels to Toggle mode on startup |
+| Extended Mode | OFF | Enables pulse buttons, DI mode selectors, master controls, diagnostics |
 
 ## Entities Created
 
-With all features enabled on an 8-channel board:
+### Standard Mode (8-channel board)
 
-**Switches** (relay control):
-- `switch.waveshare_relay_1` through `switch.waveshare_relay_8`
+| Entity ID Pattern | Type | Description |
+|-------------------|------|-------------|
+| `switch.waveshare_relay_1` ... `_8` | Switch | Relay on/off control |
+| `binary_sensor.waveshare_relay_input_1` ... `_8` | Binary Sensor | Digital input state |
 
-**Binary Sensors** (digital inputs):
-- `binary_sensor.waveshare_relay_input_1` through `binary_sensor.waveshare_relay_input_8`
+### Extended Mode (adds to Standard)
+
+| Entity ID Pattern | Type | Description |
+|-------------------|------|-------------|
+| `button.waveshare_relay_1_pulse` ... `_8_pulse` | Button | Pulse relay ON for set duration |
+| `number.waveshare_relay_1_pulse_duration` ... `_8` | Number | Pulse duration slider (seconds) |
+| `select.waveshare_relay_di_1_mode` ... `_8_mode` | Select | DI control mode per channel |
+| `button.waveshare_relay_all_relays_on` | Button | Turn all relays ON |
+| `button.waveshare_relay_all_relays_off` | Button | Turn all relays OFF |
+| `button.waveshare_relay_toggle_all_relays` | Button | Toggle all relays |
+| `sensor.waveshare_relay_firmware` | Sensor | Firmware version (diagnostic) |
+| `sensor.waveshare_relay_modbus_address` | Sensor | Modbus device address (diagnostic) |
+
+### Services
+
+| Service | Description |
+|---------|-------------|
+| `waveshare_relay.toggle_relay` | Toggle a single relay (params: `ip_address`, `port`, `channel`) |
+| `waveshare_relay.toggle_all` | Toggle all relays at once (params: `ip_address`, `port`) |
+
+---
 
 ## Example YAML Configurations
 
@@ -158,33 +259,51 @@ template:
       # Repeat for channels 3-8...
 ```
 
-### Automation: DI Toggle Mode on Startup
-
-If you prefer YAML over the config flow option:
+### Automation: Garage Door Pulse (Extended Mode)
 
 ```yaml
 automation:
-  - alias: "Waveshare DI Toggle Mode"
+  - alias: "Garage Door Toggle"
     trigger:
-      - platform: homeassistant
-        event: start
+      - platform: state
+        entity_id: binary_sensor.garage_button
+        to: "on"
     action:
-      - service: modbus.write_register
-        data:
-          hub: waveshare_1
-          slave: 1
-          address: 4096
-          value: 2
-      - service: modbus.write_register
-        data:
-          hub: waveshare_1
-          slave: 1
-          address: 4097
-          value: 2
-      # Repeat for addresses 4098-4103 (channels 3-8)
+      - service: button.press
+        target:
+          entity_id: button.waveshare_relay_1_pulse
 ```
 
-> **Note:** If you enabled "DI Toggle Mode" in the integration config flow, this automation is not needed — the integration handles it automatically on startup.
+### Automation: All Lights Off at Midnight (Extended Mode)
+
+```yaml
+automation:
+  - alias: "All Lights Off at Midnight"
+    trigger:
+      - platform: time
+        at: "00:00:00"
+    action:
+      - service: button.press
+        target:
+          entity_id: button.waveshare_relay_all_relays_off
+```
+
+### Automation: Toggle Relay via Service
+
+```yaml
+automation:
+  - alias: "Toggle Kitchen Relay"
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.kitchen_motion
+        to: "on"
+    action:
+      - service: waveshare_relay.toggle_relay
+        data:
+          ip_address: "192.168.10.97"
+          port: 4196
+          channel: 0
+```
 
 ### Full Example: configuration.yaml with Waveshare
 
@@ -303,37 +422,49 @@ template:
               entity_id: switch.waveshare_relay_8
 ```
 
+---
+
 ## Modbus Protocol Details
+
+### Connection
 
 | Property | Value |
 |----------|-------|
 | Protocol | Modbus RTU over TCP |
 | Default Port | 4196 |
 | Device ID | 1 |
-| Relay read | FC 0x01 (Read Coils), addresses 0-7 |
-| Relay write | FC 0x05 (Write Single Coil) |
-| Digital inputs | FC 0x02 (Read Discrete Inputs), addresses 0-7 |
-| DI mode config | FC 0x06 (Write Register), addresses 0x1000-0x1007 |
-| Device address | FC 0x03 (Read Register), address 0x4000 |
-| Firmware version | FC 0x03 (Read Register), address 0x8000 |
+| Baud Rate | 115200 (internal, do not change) |
+
+### Register Map
+
+| Address (hex) | Function | FC | Description |
+|---------------|----------|----|-------------|
+| `0x0000`-`0x0007` | Relay 1-8 | 0x01 (read), 0x05 (write) | ON: `0xFF00`, OFF: `0x0000`, Toggle: `0x5500` |
+| `0x00FF` | All relays | 0x05 (write) | ON: `0xFF00`, OFF: `0x0000`, Toggle: `0x5500` |
+| `0x0100`-`0x0107` | Relay 1-8 toggle | 0x05 (write) | `0xFF00` = toggle, `0x0000` = no change |
+| `0x01FF` | All relays toggle | 0x05 (write) | `0xFF00` = toggle all |
+| `0x0200`-`0x0207` | Relay 1-8 flash ON | 0x05 (write) | Value = interval in 100ms units (relay ON, then auto-OFF) |
+| `0x0400`-`0x0407` | Relay 1-8 flash OFF | 0x05 (write) | Value = interval in 100ms units (relay OFF, then auto-ON) |
+| `1x0000`-`1x0007` | Digital inputs 1-8 | 0x02 (read) | Input channel status |
+| `4x1000`-`4x1007` | DI control modes 1-8 | 0x03 (read), 0x06 (write) | 0=Normal, 1=Linkage, 2=Toggle, 3=Edge |
+| `4x4000` | Device address | 0x03 (read) | Modbus slave address |
+| `4x8000` | Software version | 0x03 (read) | e.g., `0x0064` = 100 = V1.00 |
 
 ### Coil Values (FC 0x05)
 
 | Value | Action |
 |-------|--------|
-| 0xFF00 | Turn relay ON |
-| 0x0000 | Turn relay OFF |
-| 0x5500 | Toggle relay |
-| 0xCC00 | Momentary pulse (close then auto-open) |
+| `0xFF00` | Turn relay ON |
+| `0x0000` | Turn relay OFF |
+| `0x5500` | Toggle relay state |
 
-### DI Mode Values (register 0x1000+)
+### Flash Timing
 
-| Value | Mode |
-|-------|------|
-| 0 | Disabled |
-| 1 | Momentary (press = on, release = off) |
-| 2 | Toggle (each press toggles relay) |
-| 3 | Latching |
+Flash ON/OFF interval = `value * 100ms`. Maximum value is `0x7FFF` (32,767 = ~54 minutes).
+
+Example: `value = 0x000A` = 10 * 100ms = 1 second pulse.
+
+---
 
 ## Troubleshooting
 
@@ -343,13 +474,27 @@ template:
 - Check that port 4196 (or your configured port) is not blocked by firewall
 - Try pinging the device: `ping 192.168.10.97`
 
-### Relays not responding
-- Confirm Device ID is 1 (check register 0x4000 via web interface)
-- Check serial settings: 115200 baud, 8N1
+### Relays not responding to commands
+- Confirm Device ID is 1 (check register `0x4000` in Extended Mode diagnostics or via web interface)
+- Check serial settings: 115200 baud, 8N1 (do not change from defaults)
+- **If relay doesn't respond but returns a Modbus reply:** The channel may be in **Linkage mode**. Use Extended Mode's DI mode selector to switch it to Normal or Toggle mode.
 
 ### Digital inputs always show OFF
-- Verify wiring: DI terminals need a signal (dry contact or voltage) to trigger
-- Check if DI mode is configured (enable "DI Toggle Mode" in integration settings)
+- Verify wiring: DI terminals need a signal (dry contact or voltage 5-36V) to trigger
+- Check COM terminal wiring:
+  - **COM not connected:** dry contact / passive input
+  - **COM to V+:** NPN active input (low active, 5-30V)
+  - **COM to GND:** PNP active input (high active)
+
+### Pulse button doesn't work
+- Ensure Extended Mode is enabled in the integration config
+- Check the pulse duration slider is set to a value > 0
+- The pulse is hardware-timed — even if HA disconnects, the relay will auto-revert
+
+### Entity not appearing after setup
+- Check Home Assistant logs for errors: **Settings > System > Logs**
+- Ensure the integration loaded without import errors
+- Try removing and re-adding the integration
 
 ## License
 
