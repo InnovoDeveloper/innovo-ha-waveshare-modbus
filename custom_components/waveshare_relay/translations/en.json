@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Waveshare Modbus Relay Setup",
-        "description": "Configure your Waveshare PoE ETH Relay board.\n\nDefault port is **4196** (Modbus RTU over TCP).\nSet the IP address to match your device's network configuration.",
+        "description": "Configure your Waveshare PoE ETH Relay board.\n\nDefault port is **4196** (Modbus RTU over TCP).\nSet the IP address to match your device's network configuration.\n\n**Extended Mode** adds: pulse/flash buttons, DI mode selectors, master controls, and device diagnostics.",
         "data": {
           "ip_address": "IP Address",
           "port": "Modbus Port",
@@ -11,7 +11,8 @@
           "num_channels": "Number of Channels",
           "enable_switches": "Enable Relay Switches",
           "enable_inputs": "Enable Digital Inputs",
-          "di_toggle_mode": "DI Toggle Mode (physical buttons toggle relays)"
+          "di_toggle_mode": "DI Toggle Mode (physical buttons toggle relays)",
+          "extended_mode": "Extended Mode (pulse timers, DI modes, master controls, diagnostics)"
         }
       }
     },
@@ -21,6 +22,40 @@
     },
     "abort": {
       "already_configured": "This device is already configured."
+    }
+  },
+  "services": {
+    "toggle_relay": {
+      "name": "Toggle Relay",
+      "description": "Toggle a single relay using the dedicated Modbus toggle command.",
+      "fields": {
+        "ip_address": {
+          "name": "IP Address",
+          "description": "IP address of the Waveshare relay board."
+        },
+        "port": {
+          "name": "Port",
+          "description": "Modbus port (default 4196)."
+        },
+        "channel": {
+          "name": "Channel",
+          "description": "Relay channel number (0-7)."
+        }
+      }
+    },
+    "toggle_all": {
+      "name": "Toggle All Relays",
+      "description": "Toggle all relays at once using a single Modbus command.",
+      "fields": {
+        "ip_address": {
+          "name": "IP Address",
+          "description": "IP address of the Waveshare relay board."
+        },
+        "port": {
+          "name": "Port",
+          "description": "Modbus port (default 4196)."
+        }
+      }
     }
   }
 }

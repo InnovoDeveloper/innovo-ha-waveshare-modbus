@@ -13,6 +13,7 @@ from .const import (
     CONF_ENABLE_SWITCHES,
     CONF_NUM_CHANNELS,
     CONF_DI_TOGGLE_MODE,
+    CONF_EXTENDED_MODE,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -22,10 +23,13 @@ DATA_SCHEMA = vol.Schema(
         vol.Required("ip_address"): str,
         vol.Required("port", default=4196): vol.Coerce(int),
         vol.Required("device_name", default="Waveshare Relay"): str,
-        vol.Required(CONF_NUM_CHANNELS, default=8): vol.In({8: "8 Channels", 4: "4 Channels", 2: "2 Channels"}),
+        vol.Required(CONF_NUM_CHANNELS, default=8): vol.In(
+            {8: "8 Channels", 4: "4 Channels", 2: "2 Channels"}
+        ),
         vol.Required(CONF_ENABLE_SWITCHES, default=True): bool,
         vol.Required(CONF_ENABLE_INPUTS, default=True): bool,
         vol.Optional(CONF_DI_TOGGLE_MODE, default=False): bool,
+        vol.Optional(CONF_EXTENDED_MODE, default=False): bool,
     }
 )
 
@@ -33,7 +37,7 @@ DATA_SCHEMA = vol.Schema(
 class WaveshareRelayConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Waveshare Relay."""
 
-    VERSION = 2
+    VERSION = 3
 
     async def async_step_user(self, user_input=None):
         """Handle the initial step."""
@@ -45,8 +49,9 @@ class WaveshareRelayConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     user_input["ip_address"],
                     user_input["port"],
                 )
-                # Set unique ID based on IP to prevent duplicate entries
-                await self.async_set_unique_id(f"waveshare_{user_input['ip_address']}")
+                await self.async_set_unique_id(
+                    f"waveshare_{user_input['ip_address']}"
+                )
                 self._abort_if_unique_id_configured()
 
                 return self.async_create_entry(

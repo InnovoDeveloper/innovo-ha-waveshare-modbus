@@ -1,0 +1,52 @@
+toggle_relay:
+  name: Toggle Relay
+  description: Toggle a single relay using the dedicated Modbus toggle command.
+  fields:
+    ip_address:
+      name: IP Address
+      description: IP address of the Waveshare relay board.
+      required: true
+      example: "192.168.10.97"
+      selector:
+        text:
+    port:
+      name: Port
+      description: Modbus port (default 4196).
+      required: true
+      default: 4196
+      example: 4196
+      selector:
+        number:
+          min: 1
+          max: 65535
+    channel:
+      name: Channel
+      description: Relay channel number (0-7).
+      required: true
+      example: 0
+      selector:
+        number:
+          min: 0
+          max: 7
+
+toggle_all:
+  name: Toggle All Relays
+  description: Toggle all relays at once using a single Modbus command.
+  fields:
+    ip_address:
+      name: IP Address
+      description: IP address of the Waveshare relay board.
+      required: true
+      example: "192.168.10.97"
+      selector:
+        text:
+    port:
+      name: Port
+      description: Modbus port (default 4196).
+      required: true
+      default: 4196
+      example: 4196
+      selector:
+        number:
+          min: 1
+          max: 65535
