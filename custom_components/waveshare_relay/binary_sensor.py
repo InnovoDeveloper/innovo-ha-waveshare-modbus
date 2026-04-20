@@ -1,19 +1,19 @@
 """Binary sensor platform for Waveshare Relay digital inputs."""
 
+from __future__ import annotations
+
 import logging
-from datetime import timedelta
 
 from homeassistant.components.binary_sensor import BinarySensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN, CONF_ENABLE_INPUTS, CONF_NUM_CHANNELS
-from .utils import read_discrete_inputs, read_device_address, read_software_version
+from .coordinator import WaveshareDIUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
-
-SCAN_INTERVAL = timedelta(seconds=5)
 
 
 async def async_setup_entry(
@@ -25,41 +25,51 @@ async def async_setup_entry(
     if not config_entry.data.get(CONF_ENABLE_INPUTS, True):
         return
 
+    coordinator: WaveshareDIUpdateCoordinator = hass.data[DOMAIN][
+        config_entry.entry_id
+    ]["di_coordinator"]
+
     ip_address = config_entry.data["ip_address"]
-    port = config_entry.data["port"]
     device_name = config_entry.data["device_name"]
     num_channels = config_entry.data.get(CONF_NUM_CHANNELS, 8)
 
     entities = [
-        WaveshareDigitalInput(hass, ip_address, port, device_name, ch)
+        WaveshareDigitalInput(coordinator, ip_address, device_name, ch)
         for ch in range(num_channels)
     ]
-    async_add_entities(entities, update_before_add=True)
+    async_add_entities(entities)
 
 
-class WaveshareDigitalInput(BinarySensorEntity):
+class WaveshareDigitalInput(
+    CoordinatorEntity[WaveshareDIUpdateCoordinator], BinarySensorEntity
+):
     """Binary sensor for a single Waveshare digital input."""
 
     _attr_icon = "mdi:electric-switch"
+    _attr_should_poll = False
 
-    def __init__(self, hass, ip_address, port, device_name, channel):
-        self.hass = hass
+    def __init__(
+        self,
+        coordinator: WaveshareDIUpdateCoordinator,
+        ip_address: str,
+        device_name: str,
+        channel: int,
+    ) -> None:
+        super().__init__(coordinator)
         self._ip_address = ip_address
-        self._port = port
         self._device_name = device_name
         self._channel = channel
-        self._attr_is_on = None
 
     @property
-    def unique_id(self):
+    def unique_id(self) -> str:
         return f"{DOMAIN}_{self._ip_address}_{self._channel}_input"
 
     @property
-    def name(self):
+    def name(self) -> str:
         return f"{self._device_name} Input {self._channel + 1}"
 
     @property
-    def device_info(self):
+    def device_info(self) -> dict:
         return {
             "identifiers": {(DOMAIN, self._ip_address)},
             "name": self._device_name,
@@ -67,15 +77,9 @@ class WaveshareDigitalInput(BinarySensorEntity):
             "manufacturer": "Waveshare",
         }
 
-    async def async_update(self):
-        """Poll the device for current digital input states."""
-        states = await self.hass.async_add_executor_job(
-            read_discrete_inputs, self._ip_address, self._port
-        )
-        if states is not None and self._channel < len(states):
-            self._attr_is_on = states[self._channel]
-        else:
-            _LOGGER.warning(
-                "Failed to read digital input %d from %s:%d",
-                self._channel, self._ip_address, self._port,
-            )
+    @property
+    def is_on(self) -> bool | None:
+        data = self.coordinator.data
+        if data is None or self._channel >= len(data):
+            return None
+        return data[self._channel]

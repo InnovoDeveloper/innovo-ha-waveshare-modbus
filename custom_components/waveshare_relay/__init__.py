@@ -13,7 +13,9 @@ from .const import (
     CONF_ENABLE_SWITCHES,
     CONF_DI_TOGGLE_MODE,
     CONF_EXTENDED_MODE,
+    CONF_NUM_CHANNELS,
 )
+from .coordinator import WaveshareDIUpdateCoordinator
 from .utils import set_di_toggle_mode, toggle_relay, toggle_all_relays
 
 _LOGGER = logging.getLogger(__name__)
@@ -30,9 +32,23 @@ EXTENDED_PLATFORMS = ["button", "number", "select", "sensor"]
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Waveshare Relay from a config entry."""
-    # Store entry data for service calls
     hass.data.setdefault(DOMAIN, {})
-    hass.data[DOMAIN][entry.entry_id] = entry.data
+
+    ip_address = entry.data["ip_address"]
+    port = entry.data["port"]
+    num_channels = entry.data.get(CONF_NUM_CHANNELS, 8)
+
+    di_coordinator: WaveshareDIUpdateCoordinator | None = None
+    if entry.data.get(CONF_ENABLE_INPUTS, True):
+        di_coordinator = WaveshareDIUpdateCoordinator(
+            hass, ip_address, port, num_channels
+        )
+        await di_coordinator.async_config_entry_first_refresh()
+
+    hass.data[DOMAIN][entry.entry_id] = {
+        "config": entry.data,
+        "di_coordinator": di_coordinator,
+    }
 
     # Determine platforms to load
     platforms = []
@@ -48,11 +64,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Configure DI toggle mode if enabled
     if entry.data.get(CONF_DI_TOGGLE_MODE, False):
-        ip = entry.data["ip_address"]
-        port = entry.data["port"]
-        num_ch = entry.data.get("num_channels", 8)
-        _LOGGER.info("Setting DI toggle mode for %s:%d (%d channels)", ip, port, num_ch)
-        await hass.async_add_executor_job(set_di_toggle_mode, ip, port, num_ch)
+        _LOGGER.info(
+            "Setting DI toggle mode for %s:%d (%d channels)",
+            ip_address, port, num_channels,
+        )
+        await hass.async_add_executor_job(
+            set_di_toggle_mode, ip_address, port, num_channels
+        )
 
     # Register services (once per integration, not per entry)
     if not hass.services.has_service(DOMAIN, "toggle_relay"):
