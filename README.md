@@ -187,7 +187,7 @@ If using the Vircom configuration tool:
 | Number of Channels | 8 | Match your board (8, 4, or 2) |
 | Enable Relay Switches | ON | Creates switch entities for relay control |
 | Enable Digital Inputs | ON | Creates binary_sensor entities for DI terminals |
-| DI Toggle Mode | OFF | Sets all DI channels to Toggle mode on startup |
+| DI Toggle Mode | OFF | Keeps all DI channels in Toggle mode: set on startup, re-checked every 30s and after the board comes back from a dropout, with each write verified by read-back |
 | Extended Mode | OFF | Enables pulse buttons, DI mode selectors, master controls, diagnostics |
 
 ## Entities Created

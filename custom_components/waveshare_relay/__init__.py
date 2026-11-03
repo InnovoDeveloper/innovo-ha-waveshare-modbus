@@ -1,11 +1,13 @@
 """The Waveshare Relay integration."""
 
 import logging
+from datetime import timedelta
 
 import voluptuous as vol
-from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers.event import async_track_time_interval
 
 from .const import (
     DOMAIN,
@@ -14,11 +16,14 @@ from .const import (
     CONF_DI_TOGGLE_MODE,
     CONF_EXTENDED_MODE,
     CONF_NUM_CHANNELS,
+    DI_MODE_TOGGLE,
 )
 from .coordinator import WaveshareDIUpdateCoordinator
-from .utils import set_di_toggle_mode, toggle_relay, toggle_all_relays
+from .utils import ensure_di_modes, toggle_relay, toggle_all_relays
 
 _LOGGER = logging.getLogger(__name__)
+
+DI_MODE_CHECK_INTERVAL = timedelta(seconds=30)
 
 # Standard mode platforms
 STANDARD_PLATFORMS = {
@@ -62,15 +67,41 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if platforms:
         await hass.config_entries.async_forward_entry_setups(entry, platforms)
 
-    # Configure DI toggle mode if enabled
+    # Configure DI toggle mode if enabled. The board can drop the mode (a timeout
+    # mid-write, or a reboot), and then inputs stop driving their relays until the
+    # next HA start. Check it every 30s and as soon as the board answers again.
     if entry.data.get(CONF_DI_TOGGLE_MODE, False):
         _LOGGER.info(
             "Setting DI toggle mode for %s:%d (%d channels)",
             ip_address, port, num_channels,
         )
-        await hass.async_add_executor_job(
-            set_di_toggle_mode, ip_address, port, num_channels
+
+        async def _enforce_di_mode(_now=None) -> None:
+            fixed = await hass.async_add_executor_job(
+                ensure_di_modes, ip_address, port, DI_MODE_TOGGLE, num_channels
+            )
+            if fixed:
+                _LOGGER.warning(
+                    "DI mode had drifted on %s:%d inputs %s; set back to toggle",
+                    ip_address, port, [ch + 1 for ch in fixed],
+                )
+
+        await _enforce_di_mode()
+        entry.async_on_unload(
+            async_track_time_interval(hass, _enforce_di_mode, DI_MODE_CHECK_INTERVAL)
         )
+
+        if di_coordinator is not None:
+            board_ok = di_coordinator.last_update_success
+
+            @callback
+            def _on_di_update() -> None:
+                nonlocal board_ok
+                if di_coordinator.last_update_success and not board_ok:
+                    hass.async_create_task(_enforce_di_mode())
+                board_ok = di_coordinator.last_update_success
+
+            entry.async_on_unload(di_coordinator.async_add_listener(_on_di_update))
 
     # Register services (once per integration, not per entry)
     if not hass.services.has_service(DOMAIN, "toggle_relay"):

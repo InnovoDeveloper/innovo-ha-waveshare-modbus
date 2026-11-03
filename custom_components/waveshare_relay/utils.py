@@ -4,6 +4,7 @@ import socket
 import struct
 import logging
 import threading
+import time
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -200,3 +201,30 @@ def set_di_toggle_mode(ip_address: str, port: int, num_channels: int = 8, device
             _LOGGER.error("Failed to set DI toggle mode for channel %d", ch)
             success = False
     return success
+
+
+def ensure_di_modes(ip_address: str, port: int, mode: int, num_channels: int = 8,
+                    device_id: int = 1, attempts: int = 3) -> list[int] | None:
+    """Rewrite any DI channel whose mode is not `mode`, verifying each write.
+
+    Returns the channels that were rewritten, or None if the board did not answer
+    the read. A write only counts once a read-back confirms it, because the board
+    can time out mid-sequence and leave channels in normal mode.
+    """
+    current = read_all_di_modes(ip_address, port, num_channels, device_id)
+    if current is None:
+        return None
+    fixed = []
+    for ch, value in enumerate(current):
+        if value == mode:
+            continue
+        for _ in range(attempts):
+            if (write_single_register(ip_address, port, 0x1000 + ch, mode, device_id)
+                    and read_di_mode(ip_address, port, ch, device_id) == mode):
+                fixed.append(ch)
+                break
+            time.sleep(0.3)
+        else:
+            _LOGGER.error("Failed to set DI mode %d for channel %d after %d attempts",
+                          mode, ch, attempts)
+    return fixed
